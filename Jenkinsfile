@@ -17,8 +17,8 @@ pipeline {
   }
 
   environment {
-    REGISTRY_REPO = 'your-dockerhub-username/cbaov-app'
-    AZURE_RG      = '<RESOURCE_GROUP>'
+    REGISTRY_REPO = 'vincecbaov/cbaov-app'
+    AZURE_RG      = 'vinlabs'
     AZURE_WEBAPP  = 'CBAOV-APP'
     // Optional: Azure registry URL if using ACR; default uses Docker Hub.
     REGISTRY_URL  = 'https://index.docker.io/v1/'
@@ -56,15 +56,17 @@ pipeline {
 
     stage('Build Docker image') {
       steps {
-        sh """
-          docker build -t ${REGISTRY_REPO}:${env.BUILD_VERSION} ${env.BUILD_VERSION}
-        """
+        ansiColor('xterm') {
+          sh """
+            docker build -t ${REGISTRY_REPO}:${env.BUILD_VERSION} ${env.BUILD_VERSION}
+          """
       }
     }
 
     stage('Push Docker image') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+         ansiColor('xterm') {
           sh """
             docker login -u "$DOCKER_USER" -p "$DOCKER_PASS"
             docker push ${REGISTRY_REPO}:${env.BUILD_VERSION}
@@ -77,9 +79,10 @@ pipeline {
       steps {
         withCredentials([usernamePassword(credentialsId: 'azure-sp-upass', usernameVariable: 'AZ_APP_ID', passwordVariable: 'AZ_SP_SECRET'),
                          string(credentialsId: 'azure-tenant', variable: 'AZ_TENANT_ID')]) {
-          sh """
-            az login --service-principal -u "$AZ_APP_ID" -p "$AZ_SP_SECRET" --tenant "$AZ_TENANT_ID"
-            az webapp config container set \
+          ansiColor('xterm') { 
+           sh """
+             az login --service-principal -u "$AZ_APP_ID" -p "$AZ_SP_SECRET" --tenant "$AZ_TENANT_ID"
+             az webapp config container set \
               --name ${AZURE_WEBAPP} \
               --resource-group ${AZURE_RG} \
               --docker-custom-image-name ${REGISTRY_REPO}:${env.BUILD_VERSION} \
@@ -92,9 +95,10 @@ pipeline {
 
     stage('Health check') {
       steps {
-        sh """
-          curl --fail --ssl-no-revoke https://app.cbaov.com/health
-          curl --fail --ssl-no-revoke https://staging.cbaov.com/health
+        ansiColor('xterm') {
+          sh """
+            curl --fail --ssl-no-revoke https://app.cbaov.com/health
+            curl --fail --ssl-no-revoke https://staging.cbaov.com/health
         """
       }
     }
@@ -103,12 +107,14 @@ pipeline {
       when { expression { return params.RELOAD_NGINX } }
       steps {
         sshagent(credentials: ['nginx-ssh']) {
-          sh 'ssh -o StrictHostKeyChecking=no vinadmin@nginx-server "sudo systemctl reload nginx"'
+          ansiColor('xterm') {
+            sh 'ssh -o StrictHostKeyChecking=no vinadmin@nginx-server "sudo systemctl reload nginx"'
+          }
         }
       }
     }
   }
-
+  
   post {
     success {
       echo "Deployment of ${env.BUILD_VERSION} succeeded."
