@@ -7,7 +7,6 @@ pipeline {
 
   options {
     timestamps()
-    ansiColor('xterm')
     buildDiscarder(logRotator(numToKeepStr: '20'))
   }
 
@@ -20,7 +19,6 @@ pipeline {
     REGISTRY_REPO = 'vincecbaov/cbaov-app'
     AZURE_RG      = 'vinlabs'
     AZURE_WEBAPP  = 'CBAOV-APP'
-    // Optional: Azure registry URL if using ACR; default uses Docker Hub.
     REGISTRY_URL  = 'https://index.docker.io/v1/'
   }
 
@@ -30,7 +28,6 @@ pipeline {
       steps {
         checkout scm
         script {
-          // Derive VERSION from tag when params.VERSION == 'auto'
           def ref = sh(returnStdout: true, script: "git describe --tags --exact-match 2>/dev/null || true").trim()
           if (params.VERSION == 'auto') {
             if (ref in ['v1', 'v2', 'v3']) {
@@ -60,17 +57,19 @@ pipeline {
           sh """
             docker build -t ${REGISTRY_REPO}:${env.BUILD_VERSION} ${env.BUILD_VERSION}
           """
+        }
       }
     }
 
     stage('Push Docker image') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'docker-hub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-         ansiColor('xterm') {
-          sh """
-            docker login -u "$DOCKER_USER" -p "$DOCKER_PASS"
-            docker push ${REGISTRY_REPO}:${env.BUILD_VERSION}
-          """
+          ansiColor('xterm') {
+            sh """
+              docker login -u "$DOCKER_USER" -p "$DOCKER_PASS"
+              docker push ${REGISTRY_REPO}:${env.BUILD_VERSION}
+            """
+          }
         }
       }
     }
@@ -79,16 +78,17 @@ pipeline {
       steps {
         withCredentials([usernamePassword(credentialsId: 'azure-sp-upass', usernameVariable: 'AZ_APP_ID', passwordVariable: 'AZ_SP_SECRET'),
                          string(credentialsId: 'azure-tenant', variable: 'AZ_TENANT_ID')]) {
-          ansiColor('xterm') { 
-           sh """
-             az login --service-principal -u "$AZ_APP_ID" -p "$AZ_SP_SECRET" --tenant "$AZ_TENANT_ID"
-             az webapp config container set \
-              --name ${AZURE_WEBAPP} \
-              --resource-group ${AZURE_RG} \
-              --docker-custom-image-name ${REGISTRY_REPO}:${env.BUILD_VERSION} \
-              --docker-registry-server-url ${REGISTRY_URL}
-            az webapp restart --name ${AZURE_WEBAPP} --resource-group ${AZURE_RG}
-          """
+          ansiColor('xterm') {
+            sh """
+              az login --service-principal -u "$AZ_APP_ID" -p "$AZ_SP_SECRET" --tenant "$AZ_TENANT_ID"
+              az webapp config container set \
+                --name ${AZURE_WEBAPP} \
+                --resource-group ${AZURE_RG} \
+                --docker-custom-image-name ${REGISTRY_REPO}:${env.BUILD_VERSION} \
+                --docker-registry-server-url ${REGISTRY_URL}
+              az webapp restart --name ${AZURE_WEBAPP} --resource-group ${AZURE_RG}
+            """
+          }
         }
       }
     }
@@ -99,7 +99,8 @@ pipeline {
           sh """
             curl --fail --ssl-no-revoke https://app.cbaov.com/health
             curl --fail --ssl-no-revoke https://staging.cbaov.com/health
-        """
+          """
+        }
       }
     }
 
@@ -114,7 +115,7 @@ pipeline {
       }
     }
   }
-  
+
   post {
     success {
       echo "Deployment of ${env.BUILD_VERSION} succeeded."
